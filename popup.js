@@ -26,30 +26,102 @@ async function handleFetchData() {
   const regCode = document.getElementById("regionSelect").value === "mb" ? "xsmb" : (document.getElementById("regionSelect").value === "mn" ? "xsmn" : "xsmt");
 
   const contentBox = document.getElementById("resultContent");
+  
+  // =====================================================================
+  // THAY ĐƯỜNG LINK WEB APP GOOGLE CỦA BẠN VÀO GIỮA 2 DẤU NGOẶC KÉP BÊN DƯỚI
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbzRtQ0hPWqO3iO5smGLCazQJ97WY9Jk8uDDpheE8u4/dev";
+  // =====================================================================
+
+  if (GAS_URL === "DÁN_LINK_GOOGLE_APP_SCRIPT_CỦA_BẠN_VÀO_ĐÂY") {
+      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi: Bạn chưa chèn link Google Apps Script vào file popup.js!</div>`;
+      return;
+  }
+
   contentBox.innerHTML = `
     <div class="loading-msg">
-      ⚡ Đang tải gói dữ liệu tĩnh từ máy chủ GitHub...<br>
+      🚀 Đang kết nối máy chủ Google API để cào dữ liệu...<br>
+      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Tiến trình đa luồng siêu tốc sẽ hoàn tất trong 2-3 giây.</span>
     </div>`;
 
   try {
-    // Tải nguyên file JSON đã được GitHub chuẩn bị sẵn (thêm timestamp để tránh cache trình duyệt)
-    let res = await fetch(`data_${regCode}.json?t=${new Date().getTime()}`);
-    if (!res.ok) throw new Error("Chưa tìm thấy file dữ liệu JSON từ máy chủ. Vui lòng kiểm tra lại GitHub Actions.");
-    let allData = await res.json();
-
-    // Tìm mốc ngày T0 người dùng chọn trong mảng dữ liệu 100 ngày
-    let startIndex = allData.findIndex(d => d.date === targetDateStr);
+    let url = `${GAS_URL}?reg=${regCode}&date=${targetDateStr}`;
+    let res = await fetch(url);
+    if (!res.ok) throw new Error("Máy chủ Google không phản hồi.");
     
-    if (startIndex === -1) {
-      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không có dữ liệu cho ngày ${targetDateStr}. Vui lòng chọn ngày gần đây hơn.</div>`;
+    let rawData = await res.json(); 
+
+    if (!rawData || rawData.length === 0) {
+      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không tìm thấy dữ liệu hoặc đài xổ số chưa quay ngày này.</div>`;
       return;
     }
 
-    // Cắt lấy đúng 60 ngày tính từ mốc T0 lùi về trước
-    REAL_DATA.history = allData.slice(startIndex, startIndex + 60);
+    let processedHistory = [];
+    const parser = new DOMParser();
 
-    let msg = `✅ Đã tải siêu tốc ${REAL_DATA.history.length} ngày!`;
+    for (let item of rawData) {
+      const doc = parser.parseFromString(item.html, "text/html");
+      const tables = doc.querySelectorAll("table");
+      let targetTable = null;
+
+      for (let tbl of tables) {
+        let t = tbl.textContent.toLowerCase();
+        if (t.includes("tiền thưởng") || t.includes("sl giải")) continue;
+        if (t.includes("đặc biệt") || t.includes("giải đb") || t.includes("g.đb")) { targetTable = tbl; break; }
+      }
+
+      if (targetTable) {
+        let dayData = { date: item.date, prizes: [], htmlTable: "" };
+        const rows = targetTable.querySelectorAll("tr");
+        let cleanHtml = '<table class="clean-table">';
+
+        rows.forEach((tr, idx) => {
+          if (tr.closest('thead') && idx > 0) return;
+          let cells = tr.querySelectorAll("th, td");
+          if (cells.length < 2) return;
+          let rowHtml = "<tr>";
+          let isDBRow = false;
+
+          cells.forEach((cell, ci) => {
+            let text = cell.textContent.replace(/\n/g, ' ').trim();
+            if (idx === 0 || cell.tagName === "TH") {
+              rowHtml += `<th>${text}</th>`;
+            } else {
+              if (ci === 0) {
+                rowHtml += `<td class="prize-name">${text}</td>`;
+                if (text.toLowerCase().includes("đặc biệt") || text.toLowerCase().includes("đb") || text.toLowerCase().includes("gđb")) isDBRow = true;
+              } else {
+                let nums = text.split(/\s+/).filter(n => !isNaN(n) && n.length > 0);
+                rowHtml += `<td class="prize-number">`;
+                nums.forEach(n => {
+                  rowHtml += `<span class="num-pill">${n}</span>`;
+                  dayData.prizes.push(n.replace(/\D/g, ''));
+                });
+                rowHtml += `</td>`;
+              }
+            }
+          });
+          rowHtml += "</tr>";
+          if (isDBRow) rowHtml = rowHtml.replace('<tr>', '<tr class="row-db">');
+          cleanHtml += rowHtml;
+        });
+        cleanHtml += '</table>';
+        dayData.htmlTable = cleanHtml;
+        processedHistory.push(dayData);
+      }
+    }
+
+    if (processedHistory.length === 0) {
+        contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi phân tích HTML từ máy chủ Google.</div>`;
+        return;
+    }
+
+    REAL_DATA.history = processedHistory;
     let actualDate = REAL_DATA.history[0].date;
+    
+    let msg = `✅ Máy chủ Google đã quét siêu tốc ${REAL_DATA.history.length} ngày!`;
+    if (actualDate !== targetDateStr) {
+        msg = `⚠️ Trạm dữ liệu tự lùi mốc từ ${targetDateStr} về ${actualDate} vì đài chưa quay.`;
+    }
     
     contentBox.innerHTML = `
       <div style="text-align:center; padding:10px; color:#166534; font-weight:bold; background:#dcfce7; margin-bottom:10px; border-radius:6px;">
@@ -61,7 +133,7 @@ async function handleFetchData() {
       ${REAL_DATA.history[0].htmlTable}
     `;
   } catch (error) {
-    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi kết nối: ${error.message}</div>`;
+    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi API: ${error.message}</div>`;
   }
 }
 
@@ -355,7 +427,6 @@ function handlePredictions() {
     }
   }
 
-  // Khôi phục trạng thái "Đang tính điểm..."
   ["top1LoBox", "top23LoBox", "cang3LoBox", "cang4LoBox", 
    "top1DeBox", "top23DeBox", "dan4DeBox", "dan10DeBox", "dan20DeBox", "dan36DeBox", 
    "dan48DeBox", "dan52DeBox", "dan64DeBox", 
