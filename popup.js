@@ -29,7 +29,7 @@ async function handleFetchData() {
   
   // =====================================================================
   // THAY ĐƯỜNG LINK WEB APP GOOGLE CỦA BẠN VÀO GIỮA 2 DẤU NGOẶC KÉP BÊN DƯỚI
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbzRtQ0hPWqO3iO5smGLCazQJ97WY9Jk8uDDpheE8u4/dev";
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbxzLEuO1X7iFitsKpNRh4bfQzg-U1x4YQB1Fhd4qucMChACx_zByNx1PW96RwnwulDr1A/exec";
   // =====================================================================
 
   if (GAS_URL === "DÁN_LINK_GOOGLE_APP_SCRIPT_CỦA_BẠN_VÀO_ĐÂY") {
@@ -45,7 +45,7 @@ async function handleFetchData() {
 
   try {
     let url = `${GAS_URL}?reg=${regCode}&date=${targetDateStr}`;
-    let res = await fetch(url, { redirect: 'follow', mode: 'cors' });
+    let res = await fetch(url);
     if (!res.ok) throw new Error("Máy chủ Google không phản hồi.");
     
     let rawData = await res.json(); 
