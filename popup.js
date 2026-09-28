@@ -133,13 +133,13 @@ async function handleFetchData() {
   contentBox.innerHTML = `
     <div class="loading-msg">
       ⚡ Đang đồng bộ 60 ngày dữ liệu AI...<br>
-      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Sử dụng Bộ nhớ đệm (Cache) để tối ưu tốc độ cực hạn.</span>
+      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Lần quét đầu tiên sẽ hơi chậm để nạp bộ nhớ đệm. Vui lòng chờ!</span>
     </div>`;
 
   let allResults = [];
   const TOTAL_DAYS = 60; 
-  // Do đã có Cache đỡ tải, ta có thể tăng Batch Size lên 15 ngày/lượt để quét lướt qua cực nhanh
-  const BATCH_SIZE = 15; 
+  // Hạ BATCH_SIZE xuống 3 để an toàn tuyệt đối trước các bộ lọc chống Spam
+  const BATCH_SIZE = 3; 
 
   for (let i = 0; i < TOTAL_DAYS; i += BATCH_SIZE) {
     let fetchPromises = [];
@@ -152,26 +152,35 @@ async function handleFetchData() {
     
     contentBox.innerHTML = `
     <div class="loading-msg">
-      ⚡ Đang xử lý thuật toán...<br>
+      ⚡ Đang xử lý thuật toán (Không đóng trang)...<br>
       <span style="font-size:1.1rem; font-weight:bold; color:#2563eb;">⏳ Tiến trình: ${Math.min(i + BATCH_SIZE, TOTAL_DAYS)} / 60 ngày</span>
     </div>`;
 
+    // Tăng thời gian nghỉ lên 1 giây (1000ms) để không làm nghẽn Proxy
     if (i + BATCH_SIZE < TOTAL_DAYS) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
 
+  // Lọc bỏ các ngày bị lỗi mạng (null)
   REAL_DATA.history = allResults.filter(d => d !== null);
 
-  if (REAL_DATA.history.length === 0) {
-    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi máy chủ xổ số. Vui lòng thử lại sau!</div>`;
+  // Cho phép phân tích ngay cả khi chỉ lấy được một phần dữ liệu (chỉ báo lỗi nếu lấy được dưới 5 ngày)
+  if (REAL_DATA.history.length < 5) {
+    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Máy chủ xổ số đang bảo trì hoặc mạng quá yếu. Hãy thử lại!</div>`;
     return;
   }
 
   let msg = `✅ Đồng bộ hoàn tất ${REAL_DATA.history.length} ngày!`;
+  
+  // Cảnh báo nhẹ nếu bị thiếu ngày nhưng vẫn cho phép đi tiếp
+  if (REAL_DATA.history.length < TOTAL_DAYS) {
+    msg = `⚠️ Đã lấy ${REAL_DATA.history.length}/${TOTAL_DAYS} ngày (Vẫn đủ dữ liệu để AI phân tích).`;
+  }
+
   if (REAL_DATA.history[0].prizes.length === 0) {
     REAL_DATA.history.shift(); 
-    msg = `⚠️ Ngày T0 chưa quay thưởng! Đã lùi mốc phân tích.`;
+    msg += `<br>⚠️ Ngày T0 chưa quay thưởng! Đã lùi mốc.`;
   }
   
   let actualDate = REAL_DATA.history[0].date;
