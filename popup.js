@@ -19,29 +19,36 @@ function setTodayDefault() {
 async function fetchSingleDay(year, month, day, offset, regCode) {
   let d = new Date(year, month - 1, day - offset);
   let dStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  
+  // CHIẾN THUẬT 1: KIỂM TRA BỘ NHỚ ĐỆM (Tốc độ 0.001 giây)
+  let cacheKey = `KQXS_VIP_${regCode}_${dStr}`;
+  try {
+    let cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
+      return JSON.parse(cachedData); // Nếu đã có dữ liệu, trả về ngay lập tức, không tốn mạng
+    }
+  } catch (e) {}
+
+  // Nếu chưa có trong bộ nhớ, tiến hành cào dữ liệu qua mạng
   let fetchDay = String(d.getDate()).padStart(2, '0');
   let fetchMonth = String(d.getMonth() + 1).padStart(2, '0');
   let fetchYear = d.getFullYear();
-
-  // Tập trung vào 1 nguồn dữ liệu chính xác nhất để tránh làm nghẽn Proxy
   const rawUrl = `https://xskt.com.vn/${regCode}/ngay-${parseInt(fetchDay, 10)}-${parseInt(fetchMonth, 10)}-${fetchYear}`;
   
   let html = null;
 
-  // LỚP 1: Dùng Proxy CodeTabs (Tốc độ cực nhanh, trả thẳng HTML)
   try {
     const c1 = new AbortController();
-    const t1 = setTimeout(() => c1.abort(), 7000); // Đợi tối đa 7 giây
+    const t1 = setTimeout(() => c1.abort(), 6000); 
     let res1 = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${rawUrl}`, { signal: c1.signal });
     clearTimeout(t1);
     if (res1.ok) html = await res1.text();
   } catch (e) {}
 
-  // LỚP 2: Dùng Proxy AllOrigins dự phòng (Chuyên trị Safari iOS)
   if (!html || !html.includes("đặc biệt")) {
     try {
       const c2 = new AbortController();
-      const t2 = setTimeout(() => c2.abort(), 7000);
+      const t2 = setTimeout(() => c2.abort(), 6000);
       let res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(rawUrl)}`, { signal: c2.signal });
       clearTimeout(t2);
       if (res2.ok) {
@@ -51,7 +58,6 @@ async function fetchSingleDay(year, month, day, offset, regCode) {
     } catch (e) {}
   }
 
-  // Bỏ qua nếu dữ liệu rỗng hoặc không phải bảng có giải Đặc biệt
   if (!html || !html.toLowerCase().includes("đặc biệt")) return null;
 
   const parser = new DOMParser();
@@ -102,6 +108,12 @@ async function fetchSingleDay(year, month, day, offset, regCode) {
     });
     cleanHtml += '</table>';
     dayData.htmlTable = cleanHtml;
+    
+    // CHIẾN THUẬT 2: LƯU VÀO CACHE SAU KHI TẢI THÀNH CÔNG (Chỉ lưu nếu đài đã quay xong)
+    if (dayData.prizes.length > 0) {
+        try { localStorage.setItem(cacheKey, JSON.stringify(dayData)); } catch(e) {}
+    }
+    
     return dayData; 
   }
   return null; 
@@ -120,15 +132,15 @@ async function handleFetchData() {
   
   contentBox.innerHTML = `
     <div class="loading-msg">
-      🚀 Đang tải an toàn 60 ngày dữ liệu...<br>
-      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Đang chia nhỏ gói để chống nghẽn mạng. Vui lòng không đóng trang!</span>
+      ⚡ Đang đồng bộ 60 ngày dữ liệu AI...<br>
+      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Sử dụng Bộ nhớ đệm (Cache) để tối ưu tốc độ cực hạn.</span>
     </div>`;
 
   let allResults = [];
   const TOTAL_DAYS = 60; 
-  const BATCH_SIZE = 4; // Tải 4 ngày một lượt để vượt qua mọi rào cản rate-limit
+  // Do đã có Cache đỡ tải, ta có thể tăng Batch Size lên 15 ngày/lượt để quét lướt qua cực nhanh
+  const BATCH_SIZE = 15; 
 
-  // Thuật toán chia tải và tạo thanh tiến trình động
   for (let i = 0; i < TOTAL_DAYS; i += BATCH_SIZE) {
     let fetchPromises = [];
     for (let j = 0; j < BATCH_SIZE && (i + j) < TOTAL_DAYS; j++) {
@@ -138,30 +150,28 @@ async function handleFetchData() {
     let batchResults = await Promise.all(fetchPromises);
     allResults = allResults.concat(batchResults);
     
-    // Cập nhật số ngày đã tải lên màn hình cho người dùng theo dõi
     contentBox.innerHTML = `
     <div class="loading-msg">
-      🚀 Đang quét dữ liệu lịch sử...<br>
-      <span style="font-size:1.1rem; font-weight:bold; color:#2563eb;">⏳ Đã lấy thành công ${Math.min(i + BATCH_SIZE, TOTAL_DAYS)} / 60 ngày</span>
+      ⚡ Đang xử lý thuật toán...<br>
+      <span style="font-size:1.1rem; font-weight:bold; color:#2563eb;">⏳ Tiến trình: ${Math.min(i + BATCH_SIZE, TOTAL_DAYS)} / 60 ngày</span>
     </div>`;
 
-    // Nhịp nghỉ 600ms giữa mỗi lượt tải để đánh lừa bộ lọc Spam của Proxy
     if (i + BATCH_SIZE < TOTAL_DAYS) {
-        await new Promise(resolve => setTimeout(resolve, 600));
+        await new Promise(resolve => setTimeout(resolve, 300));
     }
   }
 
   REAL_DATA.history = allResults.filter(d => d !== null);
 
   if (REAL_DATA.history.length === 0) {
-    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Máy chủ xổ số đang bảo trì hoặc mạng quá yếu. Hãy thử lại!</div>`;
+    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi máy chủ xổ số. Vui lòng thử lại sau!</div>`;
     return;
   }
 
-  let msg = `✅ Đã quét thành công ${REAL_DATA.history.length} ngày!`;
+  let msg = `✅ Đồng bộ hoàn tất ${REAL_DATA.history.length} ngày!`;
   if (REAL_DATA.history[0].prizes.length === 0) {
     REAL_DATA.history.shift(); 
-    msg = `⚠️ Ngày T0 chưa quay thưởng! Hệ thống tự động lùi mốc lấy dữ liệu.`;
+    msg = `⚠️ Ngày T0 chưa quay thưởng! Đã lùi mốc phân tích.`;
   }
   
   let actualDate = REAL_DATA.history[0].date;
@@ -175,16 +185,6 @@ async function handleFetchData() {
     </div>
     ${REAL_DATA.history[0].htmlTable}
   `;
-}
-
-function computePascal(str) {
-  let cur = (str || "00000").split('').map(n => parseInt(n, 10) || 0);
-  while (cur.length > 2) {
-    let nxt = [];
-    for (let i = 0; i < cur.length - 1; i++) nxt.push((cur[i] + cur[i + 1]) % 10);
-    cur = nxt;
-  }
-  return cur.join('');
 }
 
 function computeMatrix(str1, str2) {
