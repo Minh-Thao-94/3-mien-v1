@@ -45,7 +45,7 @@ async function handleFetchData() {
 
   try {
     let url = `${GAS_URL}?reg=${regCode}&date=${targetDateStr}`;
-    let res = await fetch(url);
+    let res = await fetch(url, { redirect: 'follow', mode: 'cors' });
     if (!res.ok) throw new Error("Máy chủ Google không phản hồi.");
     
     let rawData = await res.json(); 
