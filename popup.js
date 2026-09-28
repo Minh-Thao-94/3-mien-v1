@@ -26,19 +26,14 @@ async function handleFetchData() {
   const regCode = document.getElementById("regionSelect").value === "mb" ? "xsmb" : (document.getElementById("regionSelect").value === "mn" ? "xsmn" : "xsmt");
 
   const contentBox = document.getElementById("resultContent");
-  contentBox.innerHTML = `
-    <div class="loading-msg">
-      ⚡ Đang tải gói dữ liệu tĩnh nội bộ...<br>
-    </div>`;
+  contentBox.innerHTML = `<div class="loading-msg">⚡ Đang tải gói dữ liệu tĩnh nội bộ...<br></div>`;
 
   try {
-    // Ép trình duyệt không dùng cache bằng tham số thời gian thực
     let res = await fetch(`data_${regCode}.json?t=${new Date().getTime()}`);
-    if (!res.ok) throw new Error("Chưa có file dữ liệu. Vui lòng kiểm tra lại Google Apps Script.");
+    if (!res.ok) throw new Error("Chưa có file dữ liệu. Vui lòng bấm Run trên Google Apps Script.");
     
     let rawData = await res.json(); 
 
-    // Tìm vị trí ngày T0 người dùng yêu cầu
     let startIndex = rawData.findIndex(d => {
         let parts = d.date.split("/");
         let dataTime = new Date(parts[2], parts[1] - 1, parts[0]).getTime();
@@ -47,11 +42,10 @@ async function handleFetchData() {
     });
 
     if (startIndex === -1) {
-      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không tìm thấy dữ liệu phù hợp hoặc hệ thống chưa cập nhật đến ngày này.</div>`;
+      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không tìm thấy dữ liệu (Ngày nghỉ hoặc hệ thống chưa cập nhật).</div>`;
       return;
     }
 
-    // Lấy 60 ngày kể từ mốc tìm được
     let targetData = rawData.slice(startIndex, startIndex + 60);
     let processedHistory = [];
     const parser = new DOMParser();
@@ -63,8 +57,15 @@ async function handleFetchData() {
 
       for (let tbl of tables) {
         let t = tbl.textContent.toLowerCase();
-        if (t.includes("tiền thưởng") || t.includes("sl giải")) continue;
-        if (t.includes("đặc biệt") || t.includes("giải đb") || t.includes("g.đb")) { targetTable = tbl; break; }
+        
+        // ĐÃ SỬA: Xóa bỏ điều kiện "lô tô" gây lỗi. Chỉ lọc bỏ bảng "tiền thưởng"
+        if (t.includes("tiền thưởng") || t.includes("sl giải") || t.includes("số vé trúng")) continue;
+
+        // Bắt được bảng của cả 3 miền
+        if (t.includes("đặc biệt") || t.includes("giải đb") || t.includes("g.đb") || (t.includes("g.8") && t.includes("đb"))) { 
+            targetTable = tbl; 
+            break; 
+        }
       }
 
       if (targetTable) {
@@ -117,7 +118,7 @@ async function handleFetchData() {
     
     let msg = `✅ Đã load trực tiếp ${REAL_DATA.history.length} ngày từ GitHub!`;
     if (actualDate !== targetDateStr) {
-        msg = `⚠️ Đã lùi mốc từ ${targetDateStr} về ${actualDate} vì đài chưa quay hoặc chưa có dữ liệu.`;
+        msg = `⚠️ Đã lùi mốc từ ${targetDateStr} về ${actualDate} vì đài chưa quay.`;
     }
     
     contentBox.innerHTML = `
