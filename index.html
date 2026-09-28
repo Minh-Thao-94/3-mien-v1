@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Hệ Thống KQXS & Soi Cầu Động VIP</title>
+  <style>
+    :root { 
+      --primary: #c92a2a; 
+      --primary-bg: #fff5f5; 
+      --accent: #1e3a8a; 
+      --accent-bg: #eff6ff; 
+      --cang: #047857; 
+      --cang-bg: #ecfdf5; 
+      --math: #6b21a8; 
+      --border: #dee2e6; 
+      --text: #1e293b; 
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    
+    body { 
+      /* CHÈN LINK ẢNH NỀN CỦA BẠN VÀO ĐÂY */
+      background-image: url('1.jpg'); 
+      background-size: cover; 
+      background-position: center; 
+      background-attachment: fixed; 
+      background-repeat: no-repeat;
+      /* Nếu link ảnh lỗi, hệ thống sẽ dùng màu nền tối dự phòng này */
+      background-color: #1a1a2e; 
+      
+      color: var(--text); 
+      padding: 30px 15px; 
+      /* Nới rộng tối đa trang web để chứa nhiều số */
+      max-width: 95%; 
+      margin: 0 auto; 
+      overflow-y: auto; 
+    }
+    
+    .filter-bar { background: rgba(255, 255, 255, 0.95); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); backdrop-filter: blur(5px); }
+    .filter-group { display: flex; align-items: center; gap: 8px; }
+    
+    /* ĐÃ PHÓNG TO GẤP ĐÔI NHÃN CHỮ */
+    .filter-group label { font-size: 1.8rem; font-weight: 600; color: #475569; }
+    
+    /* ĐÃ PHÓNG TO GẤP ĐÔI Ô NHẬP LIỆU */
+    input[type="date"], select { padding: 6px 10px; border-radius: 6px; font-size: 1.9rem; border: 1px solid var(--border); outline: none; cursor: pointer; }
+    
+    .btn-group { display: flex; gap: 8px; }
+    
+    /* ĐÃ PHÓNG TO GẤP ĐÔI CHỮ VÀ NÚT BẤM */
+    button { font-weight: 700; border: none; cursor: pointer; padding: 12px 20px; border-radius: 6px; transition: 0.2s; font-size: 1.8rem; }
+    
+    button:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn-result { background: var(--primary); color: #fff; }
+    .btn-predict { background: var(--accent); color: #fff; }
+    
+    .title-box { text-align: center; margin-bottom: 16px; color: #fff; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); }
+    
+    /* ĐÃ PHÓNG TO GẤP ĐÔI TIÊU ĐỀ HỆ THỐNG */
+    .title-box h1 { font-size: 2.8rem; text-transform: uppercase; margin-bottom: 4px; color: #facc15; }
+    .title-box .target-date { font-size: 1rem; font-weight: 600; color: #f8fafc; }
+    
+    .view-section { display: none; animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .result-card { background: rgba(255, 255, 255, 0.95); border-radius: 8px; border: 2px solid var(--primary); overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 15px; }
+    .result-header { background: var(--primary); color: #fff; padding: 10px 16px; font-weight: bold; text-align: center; font-size: 1.05rem; }
+    .clean-table { width: 100%; border-collapse: collapse; text-align: center; }
+    .clean-table th, .clean-table td { border: 1px solid var(--border); padding: 8px 6px; }
+    .clean-table th { background: #f8fafc; font-size: 0.9rem; color: #1e293b; }
+    .clean-table td.prize-name { font-weight: bold; background: #f8fafc; width: 80px; color: #334155; }
+    .clean-table td.prize-number { font-size: 1.1rem; font-weight: 600; letter-spacing: 2px; }
+    .num-pill { display: inline-block; margin: 2px 4px; }
+    .loading-msg { text-align: center; padding: 30px; font-weight: bold; color: #166534; font-size: 1.05rem; line-height: 1.6; }
+    
+    .split-layout { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; align-items: stretch; }
+    .section-card { background: rgba(255, 255, 255, 0.95); border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column; backdrop-filter: blur(5px); }
+    
+    #khung-lo { flex: 3; min-width: 300px; }
+    #khung-de { flex: 7; min-width: 400px; }
+    
+    @media (max-width: 800px) {
+      #khung-lo, #khung-de { flex: 100%; min-width: 100%; }
+    }
+    
+    .sec-header { padding: 12px 16px; font-size: 1.05rem; font-weight: 800; text-align: center; letter-spacing: 1px; color: #fff; text-transform: uppercase; }
+    .sec-lo { background: var(--accent); }
+    .sec-de { background: var(--primary); }
+    .sec-body { padding: 14px 16px; flex: 1; }
+    
+    .item-row { display: flex; align-items: flex-start; padding: 14px 0; border-bottom: 1px dashed var(--border); font-size: 0.95rem; }
+    .item-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .item-label { width: 110px; font-weight: 700; color: #475569; flex-shrink: 0; font-size: 0.95rem; margin-top: 5px; }
+    .item-values { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; line-height: 1.8; }
+    
+    .score-group { display: flex; flex-direction: column; align-items: center; background: #fff; padding: 5px 12px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .pts { font-size: 0.8rem; font-weight: 800; color: #ea580c; margin-top: 4px; text-transform: uppercase; display: flex; align-items: center; gap: 3px; }
+    
+    .badge-top1 { font-size: 1.5rem; font-weight: 900; color: var(--primary); letter-spacing: 2px; }
+    .badge-top2 { font-size: 1.3rem; font-weight: 800; color: var(--accent); letter-spacing: 1px; }
+    
+    .badge-normal { display: inline-block; font-size: 1.05rem; font-weight: 700; color: #334155; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; border: 1px solid #cbd5e1; }
+    .badge-cang { font-size: 1.15rem; font-weight: 800; color: var(--cang); background: var(--cang-bg); padding: 5px 12px; border-radius: 6px; border: 1px solid #a7f3d0; letter-spacing: 1.5px; }
+  </style>
+</head>
+<body>
+
+  <div class="filter-bar">
+    <div class="filter-group"><label for="datePicker">Ngày gốc (T0):</label><input type="date" id="datePicker"></div>
+    <div class="filter-group"><label for="regionSelect">Khu vực:</label><select id="regionSelect"><option value="mb">Miền Bắc</option><option value="mn">Miền Nam</option><option value="mt">Miền Trung</option></select></div>
+    <div class="btn-group">
+      <button id="btnXemKQ" class="btn-result">📊 Quét Dữ Liệu</button>
+      <button id="btnPhanTich" class="btn-predict">🎯 Phân tích AI</button>
+    </div>
+  </div>
+
+  <div class="title-box">
+    <h1 id="mainTitle">HỆ THỐNG XỔ SỐ AI</h1>
+    <div class="target-date"></div>
+  </div>
+
+  <div id="resultSection" class="view-section">
+    <div class="result-card">
+      <div class="result-header">BẢNG KẾT QUẢ GẦN NHẤT (T0)</div>
+      <div id="resultContent"><div class="loading-msg">Đang chờ lệnh quét...</div></div>
+    </div>
+  </div>
+
+  <div id="predictSection" class="view-section">
+<!-- THÊM DÒNG HIỂN THỊ NGÀY DỰ ĐOÁN VÀO ĐÂY -->
+    <div id="predictTitle" style="text-align:center; padding:12px; margin-bottom:15px; border-radius:6px; background:#eff6ff; border: 2px dashed #3b82f6; color: #1d4ed8; font-size: 1.6rem; font-weight: 800; text-transform: uppercase;">
+        --
+    </div>
+    
+    <div class="split-layout">
+      <!-- BẢNG LÔ TÔ ĐƯỢC GẮN ID KHUNG-LO -->
+      <div class="section-card" id="khung-lo">
+        <div class="sec-header sec-lo">LÔ TÔ VIP</div>
+        <div class="sec-body">
+          <div class="item-row">
+            <div class="item-label" style="color: var(--accent);">Bạch Thủ:</div>
+            <div class="item-values" id="top1LoBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label">Song Thủ:</div>
+            <div class="item-values" id="top23LoBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label" style="color: var(--cang);">3 Càng Lô:</div>
+            <div class="item-values" id="cang3LoBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label" style="color: var(--cang);">4 Càng Lô:</div>
+            <div class="item-values" id="cang4LoBox">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BẢNG ĐẶC BIỆT ĐƯỢC GẮN ID KHUNG-DE -->
+      <div class="section-card" id="khung-de">
+        <div class="sec-header sec-de">ĐẶC BIỆT</div>
+        <div class="sec-body">
+          <div class="item-row">
+            <div class="item-label" style="color: var(--primary);">Bạch Thủ:</div>
+            <div class="item-values" id="top1DeBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label">Song Thủ:</div>
+            <div class="item-values" id="top23DeBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label">Tứ Thủ (4 Số):</div>
+            <div class="item-values" id="dan4DeBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label">Dàn 10 Số:</div>
+            <div class="item-values" id="dan10DeBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label">Dàn 20 Số:</div>
+            <div class="item-values" id="dan20DeBox">--</div>
+          </div>
+          
+          <!-- Đã chuẩn hóa ID dàn 36 số và thêm các dàn 48, 52, 64 -->
+          <div class="item-row">
+            <div class="item-label">Dàn 36 Số:</div>
+            <div class="item-values" id="dan36DeBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label">Dàn 48 Số:</div>
+            <div class="item-values" id="dan48DeBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label">Dàn 52 Số:</div>
+            <div class="item-values" id="dan52DeBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label">Dàn 64 Số:</div>
+            <div class="item-values" id="dan64DeBox">--</div>
+          </div>
+          
+          <!-- Đã dọn dẹp, chỉ giữ 1 dòng 3 càng và 1 dòng 4 càng đề -->
+          <div class="item-row">
+            <div class="item-label" style="color: var(--cang);">3 Càng Đề:</div>
+            <div class="item-values" id="cang3DeBox">--</div>
+          </div>
+          <div class="item-row">
+            <div class="item-label" style="color: var(--cang);">4 Càng Đề:</div>
+            <div class="item-values" id="cang4DeBox">--</div>
+          </div>
+        </div>
+      </div>
+    </div> 
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

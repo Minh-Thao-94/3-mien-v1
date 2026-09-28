@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Hệ Thống Phân Tích Xổ Số VIP",
+  "version": "1.0",
+  "description": "Cào kết quả trực tiếp và phân tích thuật toán 7 ngày",
+  "action": {
+    "default_title": "Mở Bảng Phân Tích"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://*.xosodaiphat.com/*",
+    "https://*.xskt.com.vn/*",
+    "https://xoso.com.vn/*",
+    "https://az24.vn/*",
+    "https://www.minhngoc.net.vn/*"
+  ]
+}
