@@ -1,0 +1,25 @@
+name: Tự động cập nhật KQXS
+on:
+  schedule:
+    - cron: '45 11 * * *' # Chạy tự động lúc 18:45 giờ Việt Nam hàng ngày
+  workflow_dispatch:      # Nút bấm chạy thủ công
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Cài đặt thư viện phân tích DOM
+        run: npm install jsdom
+      - name: Chạy kịch bản cào dữ liệu (Scraping)
+        run: node scraper.js
+      - name: Lưu file dữ liệu tĩnh vào Source Code
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add data_xsmb.json data_xsmn.json data_xsmt.json
+          git commit -m "Auto-update KQXS data" || echo "Không có dữ liệu mới để cập nhật"
+          git push
