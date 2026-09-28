@@ -121,46 +121,50 @@ async function handleFetchData() {
 
   const contentBox = document.getElementById("resultContent");
   
-  // Đã cập nhật dòng thông báo theo yêu cầu mới
   contentBox.innerHTML = `
     <div class="loading-msg">
-      🚀 Đang phát đa luồng lấy dữ liệu 60 ngày...<br>
-      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Tiến trình có thể mất 5 - 8 giây.</span>
+      🚀 Đang tải 60 ngày dữ liệu (Thuật toán chống chặn)...<br>
+      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Tiến trình đang chia nhỏ gói dữ liệu, có thể mất 5 - 10 giây.</span>
     </div>`;
 
-  let fetchPromises = [];
-  // Đã tăng số vòng lặp từ 8 lên 30 để lấy dữ liệu 30 ngày
-  for (let i = 0; i < 60; i++) {
-    fetchPromises.push(fetchSingleDay(year, month, day, i, regCode));
+  let allResults = [];
+  const TOTAL_DAYS = 60; // Tổng số ngày muốn lấy
+  const BATCH_SIZE = 10; // Cứ 10 ngày tải 1 lần để điện thoại không bị quá tải
+
+  // Thuật toán chia nhỏ gói dữ liệu (Batching)
+  for (let i = 0; i < TOTAL_DAYS; i += BATCH_SIZE) {
+    let fetchPromises = [];
+    for (let j = 0; j < BATCH_SIZE && (i + j) < TOTAL_DAYS; j++) {
+      fetchPromises.push(fetchSingleDay(year, month, day, i + j, regCode));
+    }
+    
+    // Đợi tải xong cụm 10 ngày hiện tại mới tải tiếp
+    let batchResults = await Promise.all(fetchPromises);
+    allResults = allResults.concat(batchResults);
   }
 
-  let results = await Promise.all(fetchPromises);
-  REAL_DATA.history = results.filter(d => d !== null);
+  REAL_DATA.history = allResults.filter(d => d !== null);
 
   if (REAL_DATA.history.length === 0) {
-    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không thể lấy dữ liệu. Hãy kiểm tra kết nối mạng.</div>`;
+    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không thể lấy dữ liệu. Hãy kiểm tra kết nối mạng hoặc thử lại sau 1 phút.</div>`;
     return;
   }
 
-let msg = `✅ Đã quét thành công ${REAL_DATA.history.length} ngày!`;
+  let msg = `✅ Đã quét thành công ${REAL_DATA.history.length} ngày!`;
   if (REAL_DATA.history[0].prizes.length === 0) {
     REAL_DATA.history.shift(); 
     msg = `⚠️ Ngày T0 chưa quay thưởng! Hệ thống tự động lùi mốc lấy dữ liệu.`;
   }
   
-  // Lấy ra ngày thực tế của bảng dữ liệu đang hiển thị
   let actualDate = REAL_DATA.history[0].date;
   
   contentBox.innerHTML = `
     <div style="text-align:center; padding:10px; color:#166534; font-weight:bold; background:#dcfce7; margin-bottom:10px; border-radius:6px;">
         ${msg}
     </div>
-    
-    <!-- KHỐI HIỂN THỊ NGÀY THÁNG ĐƯỢC THÊM VÀO ĐÂY -->
     <div style="text-align:center; padding:12px; margin-bottom:15px; border-radius:6px; background:#fff5f5; border: 2px dashed #fca5a5; color: #b91c1c; font-size: 1.6rem; font-weight: 800; text-transform: uppercase;">
         📅 KẾT QUẢ XỔ SỐ NGÀY: ${actualDate}
     </div>
-    
     ${REAL_DATA.history[0].htmlTable}
   `;
 }
