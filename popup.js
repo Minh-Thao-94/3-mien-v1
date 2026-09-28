@@ -23,106 +23,86 @@ async function fetchSingleDay(year, month, day, offset, regCode) {
   let fetchMonth = String(d.getMonth() + 1).padStart(2, '0');
   let fetchYear = d.getFullYear();
 
-  const rawUrls = [
-    `https://xosodaiphat.com/${regCode}-${fetchDay}-${fetchMonth}-${fetchYear}.html`,
-    `https://xskt.com.vn/${regCode}/ngay-${parseInt(fetchDay, 10)}-${parseInt(fetchMonth, 10)}-${fetchYear}`,
-    `https://xoso.com.vn/${regCode}-${fetchDay}-${fetchMonth}-${fetchYear}.html`
-  ];
+  // Tập trung vào 1 nguồn dữ liệu chính xác nhất để tránh làm nghẽn Proxy
+  const rawUrl = `https://xskt.com.vn/${regCode}/ngay-${parseInt(fetchDay, 10)}-${parseInt(fetchMonth, 10)}-${fetchYear}`;
   
-  for (let rawUrl of rawUrls) {
+  let html = null;
+
+  // LỚP 1: Dùng Proxy CodeTabs (Tốc độ cực nhanh, trả thẳng HTML)
+  try {
+    const c1 = new AbortController();
+    const t1 = setTimeout(() => c1.abort(), 7000); // Đợi tối đa 7 giây
+    let res1 = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${rawUrl}`, { signal: c1.signal });
+    clearTimeout(t1);
+    if (res1.ok) html = await res1.text();
+  } catch (e) {}
+
+  // LỚP 2: Dùng Proxy AllOrigins dự phòng (Chuyên trị Safari iOS)
+  if (!html || !html.includes("đặc biệt")) {
     try {
-      const controller = new AbortController();
-      // Tăng thời gian lên 12 giây để mạng di động có thêm thời gian xử lý JSON
-      const timeoutId = setTimeout(() => controller.abort(), 12000); 
-      
-      let html = null;
-
-      // LỚP 1: Thử lấy trực tiếp (Tốc độ bàn thờ dành riêng cho Laptop/PC)
-      try {
-        let res = await fetch(rawUrl, { signal: controller.signal });
-        if (res.ok) html = await res.text();
-      } catch (e) {
-        // Điện thoại bị CORS sẽ bỏ qua bước này
+      const c2 = new AbortController();
+      const t2 = setTimeout(() => c2.abort(), 7000);
+      let res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(rawUrl)}`, { signal: c2.signal });
+      clearTimeout(t2);
+      if (res2.ok) {
+        let json = await res2.json();
+        html = json.contents;
       }
-      
-      // LỚP 2: Dùng AllOrigins bọc JSON (Chuyên trị Safari iOS - Tỷ lệ thành công 99%)
-      if (!html) {
-        try {
-          let proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rawUrl)}`;
-          let proxyRes = await fetch(proxyUrl, { signal: controller.signal });
-          if (proxyRes.ok) {
-            let json = await proxyRes.json();
-            html = json.contents;
+    } catch (e) {}
+  }
+
+  // Bỏ qua nếu dữ liệu rỗng hoặc không phải bảng có giải Đặc biệt
+  if (!html || !html.toLowerCase().includes("đặc biệt")) return null;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const tables = doc.querySelectorAll("table");
+  let targetTable = null;
+
+  for (let tbl of tables) {
+    let t = tbl.innerText.toLowerCase();
+    if (t.includes("tiền thưởng") || t.includes("trùng") || t.includes("sl giải")) continue;
+    if (t.includes("đặc biệt") || t.includes("giải đb") || t.includes("g.đb")) { targetTable = tbl; break; }
+  }
+
+  if (targetTable) {
+    let dayData = { date: dStr, prizes: [], htmlTable: "" };
+    const rows = targetTable.querySelectorAll("tr");
+    let cleanHtml = '<table class="clean-table">';
+
+    rows.forEach((tr, idx) => {
+      if (tr.closest('thead') && idx > 0) return; 
+      let cells = tr.querySelectorAll("th, td");
+      if (cells.length < 2) return;
+      let rowHtml = "<tr>";
+      let isDBRow = false;
+
+      cells.forEach((cell, ci) => {
+        let text = cell.textContent.replace(/\n/g, ' ').trim();
+        if (idx === 0 || cell.tagName === "TH") {
+          rowHtml += `<th>${text}</th>`;
+        } else {
+          if (ci === 0) {
+            rowHtml += `<td class="prize-name">${text}</td>`;
+            if (text.toLowerCase().includes("đặc biệt") || text.toLowerCase().includes("đb") || text.toLowerCase().includes("gđb")) isDBRow = true;
+          } else {
+            let nums = text.split(/\s+/).filter(n => !isNaN(n) && n.length > 0);
+            rowHtml += `<td class="prize-number">`;
+            nums.forEach(n => {
+              rowHtml += `<span class="num-pill">${n}</span>`;
+              dayData.prizes.push(n.replace(/\D/g, ''));
+            });
+            rowHtml += `</td>`;
           }
-        } catch (e) {}
-      }
-
-      // LỚP 3: Dự phòng cuối cùng bằng corsproxy.org
-      if (!html) {
-        try {
-          let proxyUrl2 = `https://corsproxy.org/?${encodeURIComponent(rawUrl)}`;
-          let proxyRes2 = await fetch(proxyUrl2, { signal: controller.signal });
-          if (proxyRes2.ok) html = await proxyRes2.text();
-        } catch (e) {}
-      }
-      
-      clearTimeout(timeoutId);
-
-      if (!html || !html.toLowerCase().includes("đặc biệt")) continue;
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
-      const tables = doc.querySelectorAll("table");
-      let targetTable = null;
-
-      for (let tbl of tables) {
-        let t = tbl.innerText.toLowerCase();
-        if (t.includes("tiền thưởng") || t.includes("trùng") || t.includes("sl giải")) continue;
-        if (t.includes("đặc biệt") || t.includes("giải đb") || t.includes("g.đb")) { targetTable = tbl; break; }
-      }
-
-      if (targetTable) {
-        let dayData = { date: dStr, prizes: [], htmlTable: "" };
-        const rows = targetTable.querySelectorAll("tr");
-        let cleanHtml = '<table class="clean-table">';
-
-        rows.forEach((tr, idx) => {
-          if (tr.closest('thead') && idx > 0) return; 
-          let cells = tr.querySelectorAll("th, td");
-          if (cells.length < 2) return;
-          let rowHtml = "<tr>";
-          let isDBRow = false;
-
-          cells.forEach((cell, ci) => {
-            let text = cell.textContent.replace(/\n/g, ' ').trim();
-            if (idx === 0 || cell.tagName === "TH") {
-              rowHtml += `<th>${text}</th>`;
-            } else {
-              if (ci === 0) {
-                rowHtml += `<td class="prize-name">${text}</td>`;
-                if (text.toLowerCase().includes("đặc biệt") || text.toLowerCase().includes("đb") || text.toLowerCase().includes("gđb")) isDBRow = true;
-              } else {
-                let nums = text.split(/\s+/).filter(n => !isNaN(n) && n.length > 0);
-                rowHtml += `<td class="prize-number">`;
-                nums.forEach(n => {
-                  rowHtml += `<span class="num-pill">${n}</span>`;
-                  dayData.prizes.push(n.replace(/\D/g, ''));
-                });
-                rowHtml += `</td>`;
-              }
-            }
-          });
-          rowHtml += "</tr>";
-          if (isDBRow) rowHtml = rowHtml.replace('<tr>', '<tr class="row-db">');
-          cleanHtml += rowHtml;
-        });
-        cleanHtml += '</table>';
-        dayData.htmlTable = cleanHtml;
-        return dayData; 
-      }
-    } catch (e) { 
-        // Lỗi timeout thì lặp sang nguồn phụ tiếp theo
-    } 
+        }
+      });
+      rowHtml += "</tr>";
+      if (isDBRow) rowHtml = rowHtml.replace('<tr>', '<tr class="row-db">');
+      cleanHtml += rowHtml;
+    });
+    cleanHtml += '</table>';
+    dayData.htmlTable = cleanHtml;
+    return dayData; 
   }
   return null; 
 }
@@ -140,30 +120,41 @@ async function handleFetchData() {
   
   contentBox.innerHTML = `
     <div class="loading-msg">
-      🚀 Đang tải 60 ngày dữ liệu (Thuật toán chống chặn)...<br>
-      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Tiến trình đang chia nhỏ gói dữ liệu, có thể mất 5 - 10 giây.</span>
+      🚀 Đang tải an toàn 60 ngày dữ liệu...<br>
+      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Đang chia nhỏ gói để chống nghẽn mạng. Vui lòng không đóng trang!</span>
     </div>`;
 
   let allResults = [];
-  const TOTAL_DAYS = 60; // Tổng số ngày muốn lấy
-  const BATCH_SIZE = 10; // Cứ 10 ngày tải 1 lần để điện thoại không bị quá tải
+  const TOTAL_DAYS = 60; 
+  const BATCH_SIZE = 4; // Tải 4 ngày một lượt để vượt qua mọi rào cản rate-limit
 
-  // Thuật toán chia nhỏ gói dữ liệu (Batching)
+  // Thuật toán chia tải và tạo thanh tiến trình động
   for (let i = 0; i < TOTAL_DAYS; i += BATCH_SIZE) {
     let fetchPromises = [];
     for (let j = 0; j < BATCH_SIZE && (i + j) < TOTAL_DAYS; j++) {
       fetchPromises.push(fetchSingleDay(year, month, day, i + j, regCode));
     }
     
-    // Đợi tải xong cụm 10 ngày hiện tại mới tải tiếp
     let batchResults = await Promise.all(fetchPromises);
     allResults = allResults.concat(batchResults);
+    
+    // Cập nhật số ngày đã tải lên màn hình cho người dùng theo dõi
+    contentBox.innerHTML = `
+    <div class="loading-msg">
+      🚀 Đang quét dữ liệu lịch sử...<br>
+      <span style="font-size:1.1rem; font-weight:bold; color:#2563eb;">⏳ Đã lấy thành công ${Math.min(i + BATCH_SIZE, TOTAL_DAYS)} / 60 ngày</span>
+    </div>`;
+
+    // Nhịp nghỉ 600ms giữa mỗi lượt tải để đánh lừa bộ lọc Spam của Proxy
+    if (i + BATCH_SIZE < TOTAL_DAYS) {
+        await new Promise(resolve => setTimeout(resolve, 600));
+    }
   }
 
   REAL_DATA.history = allResults.filter(d => d !== null);
 
   if (REAL_DATA.history.length === 0) {
-    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không thể lấy dữ liệu. Hãy kiểm tra kết nối mạng hoặc thử lại sau 1 phút.</div>`;
+    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Máy chủ xổ số đang bảo trì hoặc mạng quá yếu. Hãy thử lại!</div>`;
     return;
   }
 
