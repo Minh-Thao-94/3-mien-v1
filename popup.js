@@ -58,11 +58,10 @@ async function handleFetchData() {
       for (let tbl of tables) {
         let t = tbl.textContent.toLowerCase();
         
-        // ĐÃ SỬA: Xóa bỏ điều kiện "lô tô" gây lỗi. Chỉ lọc bỏ bảng "tiền thưởng"
-        if (t.includes("tiền thưởng") || t.includes("sl giải") || t.includes("số vé trúng")) continue;
-
-        // Bắt được bảng của cả 3 miền
+        // Bắt chính xác bảng chứa kết quả
         if (t.includes("đặc biệt") || t.includes("giải đb") || t.includes("g.đb") || (t.includes("g.8") && t.includes("đb"))) { 
+            // Nếu là bảng "Lô tô" của Miền Bắc (thường chứa chữ "đặc biệt"), bỏ qua
+            if (t.includes("đầu") && t.includes("đuôi")) continue;
             targetTable = tbl; 
             break; 
         }
@@ -89,10 +88,13 @@ async function handleFetchData() {
                 rowHtml += `<td class="prize-name">${text}</td>`;
                 if (text.toLowerCase().includes("đặc biệt") || text.toLowerCase().includes("đb") || text.toLowerCase().includes("gđb")) isDBRow = true;
               } else {
-                let nums = text.split(/\s+/).filter(n => !isNaN(n) && n.length > 0);
+                // Tách các dãy số bị dính chùm bằng biểu thức chính quy (Regex)
+                // Phân tách bởi khoảng trắng, dấu phẩy, dấu chấm hoặc bất kỳ ký tự không phải số nào
+                let nums = text.split(/[\s,.-]+/).filter(n => !isNaN(n) && n.length > 0);
                 rowHtml += `<td class="prize-number">`;
                 nums.forEach(n => {
                   rowHtml += `<span class="num-pill">${n}</span>`;
+                  // Chỉ lấy các con số, loại bỏ mọi ký tự lạ
                   dayData.prizes.push(n.replace(/\D/g, ''));
                 });
                 rowHtml += `</td>`;
@@ -134,7 +136,6 @@ async function handleFetchData() {
     contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi nạp dữ liệu: ${error.message}</div>`;
   }
 }
-
 function computePascal(str) {
   let cur = (str || "00000").split('').map(n => parseInt(n, 10) || 0);
   while (cur.length > 2) {
