@@ -26,51 +26,37 @@ async function handleFetchData() {
   const regCode = document.getElementById("regionSelect").value === "mb" ? "xsmb" : (document.getElementById("regionSelect").value === "mn" ? "xsmn" : "xsmt");
 
   const contentBox = document.getElementById("resultContent");
-  
-  // =====================================================================
-  // THAY ĐƯỜNG LINK WEB APP GOOGLE CỦA BẠN VÀO GIỮA 2 DẤU NGOẶC KÉP BÊN DƯỚI
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbxzLEuO1X7iFitsKpNRh4bfQzg-U1x4YQB1Fhd4qucMChACx_zByNx1PW96RwnwulDr1A/exec";
-  // =====================================================================
-
-  if (GAS_URL === "DÁN_LINK_GOOGLE_APP_SCRIPT_CỦA_BẠN_VÀO_ĐÂY") {
-      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi: Bạn chưa chèn link Google Apps Script vào file popup.js!</div>`;
-      return;
-  }
-
   contentBox.innerHTML = `
     <div class="loading-msg">
-      🚀 Đang kết nối máy chủ Google API để cào dữ liệu...<br>
-      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Tiến trình đa luồng siêu tốc sẽ hoàn tất trong 2-3 giây.</span>
+      ⚡ Đang tải gói dữ liệu tĩnh nội bộ...<br>
     </div>`;
 
   try {
-    let url = `${GAS_URL}?reg=${regCode}&date=${targetDateStr}`;
+    // Ép trình duyệt không dùng cache bằng tham số thời gian thực
+    let res = await fetch(`data_${regCode}.json?t=${new Date().getTime()}`);
+    if (!res.ok) throw new Error("Chưa có file dữ liệu. Vui lòng kiểm tra lại Google Apps Script.");
     
-    // Bọc link Google qua trạm AllOrigins để vượt qua hoàn toàn bộ lọc CORS và chống chuyển hướng 302 của Safari
-    let safeUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    
-    let res = await fetch(safeUrl);
-    if (!res.ok) throw new Error("Máy chủ bị từ chối kết nối.");
-    
-    let textData = await res.text();
-    
-    // Bắt lỗi cực mạnh: Nếu Google trả về mã HTML (trang đăng nhập) thay vì dữ liệu JSON, 
-    // nghĩa là bạn chưa thiết lập thành công quyền "Anyone" ở bản Deploy mới nhất.
-    if (textData.toLowerCase().includes("<html")) {
-        throw new Error("Chưa mở quyền 'Anyone' trên Google Script hoặc chưa chọn 'New version' khi Deploy.");
-    }
-    
-    let rawData = JSON.parse(textData); 
+    let rawData = await res.json(); 
 
-    if (!rawData || rawData.length === 0) {
-      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không tìm thấy dữ liệu hoặc đài xổ số chưa quay ngày này.</div>`;
+    // Tìm vị trí ngày T0 người dùng yêu cầu
+    let startIndex = rawData.findIndex(d => {
+        let parts = d.date.split("/");
+        let dataTime = new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+        let targetTime = new Date(year, month - 1, day).getTime();
+        return dataTime <= targetTime;
+    });
+
+    if (startIndex === -1) {
+      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không tìm thấy dữ liệu phù hợp hoặc hệ thống chưa cập nhật đến ngày này.</div>`;
       return;
     }
 
+    // Lấy 60 ngày kể từ mốc tìm được
+    let targetData = rawData.slice(startIndex, startIndex + 60);
     let processedHistory = [];
     const parser = new DOMParser();
 
-    for (let item of rawData) {
+    for (let item of targetData) {
       const doc = parser.parseFromString(item.html, "text/html");
       const tables = doc.querySelectorAll("table");
       let targetTable = null;
@@ -123,16 +109,15 @@ async function handleFetchData() {
     }
 
     if (processedHistory.length === 0) {
-        contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi phân tích HTML từ máy chủ Google.</div>`;
-        return;
+        throw new Error("Không thể trích xuất dữ liệu xổ số từ HTML tĩnh.");
     }
 
     REAL_DATA.history = processedHistory;
     let actualDate = REAL_DATA.history[0].date;
     
-    let msg = `✅ Máy chủ Google đã quét siêu tốc ${REAL_DATA.history.length} ngày!`;
+    let msg = `✅ Đã load trực tiếp ${REAL_DATA.history.length} ngày từ GitHub!`;
     if (actualDate !== targetDateStr) {
-        msg = `⚠️ Trạm dữ liệu tự lùi mốc từ ${targetDateStr} về ${actualDate} vì đài chưa quay.`;
+        msg = `⚠️ Đã lùi mốc từ ${targetDateStr} về ${actualDate} vì đài chưa quay hoặc chưa có dữ liệu.`;
     }
     
     contentBox.innerHTML = `
@@ -145,7 +130,7 @@ async function handleFetchData() {
       ${REAL_DATA.history[0].htmlTable}
     `;
   } catch (error) {
-    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi API: ${error.message}</div>`;
+    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi nạp dữ liệu: ${error.message}</div>`;
   }
 }
 
@@ -355,11 +340,9 @@ function runDynamicAnalysis() {
 
     const getSimpleBadge = (num) => `<span class="badge-normal">${num}</span>`;
 
-    // 1. IN KẾT QUẢ LÔ TÔ
     document.getElementById("top1LoBox").innerHTML = getScoreHtml(sortedLo[0], 'badge-top1');
     document.getElementById("top23LoBox").innerHTML = getScoreHtml(sortedLo[1], 'badge-top2') + getScoreHtml(sortedLo[2], 'badge-top2');
     
-    // 2. IN KẾT QUẢ ĐẶC BIỆT & CÁC DÀN
     document.getElementById("top1DeBox").innerHTML = getScoreHtml(sortedDe[0], 'badge-top1');
     document.getElementById("top23DeBox").innerHTML = getScoreHtml(sortedDe[1], 'badge-top2') + getScoreHtml(sortedDe[2], 'badge-top2');
     
@@ -381,7 +364,6 @@ function runDynamicAnalysis() {
     document.getElementById("dan52DeBox").innerHTML = dan52.map(getSimpleBadge).join(' ');
     document.getElementById("dan64DeBox").innerHTML = dan64.map(getSimpleBadge).join(' ');
 
-    // 3. TẠO CÁC SỐ CÀNG ĐƠN LẺ
     let gdbT0 = (history[0].prizes[0] || "00000").toString().padStart(5, '0');
     let g1T0 = (history[0].prizes[1] || "00000").toString().padStart(5, '0');
     
@@ -426,7 +408,6 @@ function handlePredictions() {
   document.getElementById("resultSection").style.display = "none";
   document.getElementById("predictSection").style.display = "block";
   
-  // TÍNH TOÁN VÀ IN RA NGÀY DỰ ĐOÁN (T0 + 1 NGÀY)
   const dateVal = document.getElementById("datePicker").value;
   if (dateVal) {
     const [year, month, day] = dateVal.split("-").map(Number);
