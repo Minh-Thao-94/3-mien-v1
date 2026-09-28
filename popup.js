@@ -45,10 +45,22 @@ async function handleFetchData() {
 
   try {
     let url = `${GAS_URL}?reg=${regCode}&date=${targetDateStr}`;
-    let res = await fetch(url, { redirect: 'follow', mode: 'cors' });
-    if (!res.ok) throw new Error("Máy chủ Google không phản hồi.");
     
-    let rawData = await res.json(); 
+    // Bọc link Google qua trạm AllOrigins để vượt qua hoàn toàn bộ lọc CORS và chống chuyển hướng 302 của Safari
+    let safeUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    
+    let res = await fetch(safeUrl);
+    if (!res.ok) throw new Error("Máy chủ bị từ chối kết nối.");
+    
+    let textData = await res.text();
+    
+    // Bắt lỗi cực mạnh: Nếu Google trả về mã HTML (trang đăng nhập) thay vì dữ liệu JSON, 
+    // nghĩa là bạn chưa thiết lập thành công quyền "Anyone" ở bản Deploy mới nhất.
+    if (textData.toLowerCase().includes("<html")) {
+        throw new Error("Chưa mở quyền 'Anyone' trên Google Script hoặc chưa chọn 'New version' khi Deploy.");
+    }
+    
+    let rawData = JSON.parse(textData); 
 
     if (!rawData || rawData.length === 0) {
       contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không tìm thấy dữ liệu hoặc đài xổ số chưa quay ngày này.</div>`;
