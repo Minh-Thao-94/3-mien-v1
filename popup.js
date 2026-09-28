@@ -23,7 +23,6 @@ async function fetchSingleDay(year, month, day, offset, regCode) {
   let fetchMonth = String(d.getMonth() + 1).padStart(2, '0');
   let fetchYear = d.getFullYear();
 
-  // Danh sách URL gốc
   const rawUrls = [
     `https://xosodaiphat.com/${regCode}-${fetchDay}-${fetchMonth}-${fetchYear}.html`,
     `https://xskt.com.vn/${regCode}/ngay-${parseInt(fetchDay, 10)}-${parseInt(fetchMonth, 10)}-${fetchYear}`,
@@ -33,24 +32,42 @@ async function fetchSingleDay(year, month, day, offset, regCode) {
   for (let rawUrl of rawUrls) {
     try {
       const controller = new AbortController();
-      // Tăng thời gian chờ lên 10 giây để tải trọng 60 ngày có đủ thời gian xử lý
-      const timeoutId = setTimeout(() => controller.abort(), 10000); 
+      // Tăng thời gian lên 12 giây để mạng di động có thêm thời gian xử lý JSON
+      const timeoutId = setTimeout(() => controller.abort(), 12000); 
       
       let html = null;
+
+      // LỚP 1: Thử lấy trực tiếp (Tốc độ bàn thờ dành riêng cho Laptop/PC)
       try {
-        // BƯỚC 1: Thử lấy dữ liệu trực tiếp (Laptop sẽ chạy rất nhanh qua bước này)
         let res = await fetch(rawUrl, { signal: controller.signal });
         if (res.ok) html = await res.text();
-      } catch (directError) {
-        // BƯỚC 2: Nếu lấy trực tiếp lỗi (do Safari iOS chặn CORS), tự động dùng Proxy dự phòng
-        let proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`;
-        let proxyRes = await fetch(proxyUrl, { signal: controller.signal });
-        if (proxyRes.ok) html = await proxyRes.text();
+      } catch (e) {
+        // Điện thoại bị CORS sẽ bỏ qua bước này
+      }
+      
+      // LỚP 2: Dùng AllOrigins bọc JSON (Chuyên trị Safari iOS - Tỷ lệ thành công 99%)
+      if (!html) {
+        try {
+          let proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rawUrl)}`;
+          let proxyRes = await fetch(proxyUrl, { signal: controller.signal });
+          if (proxyRes.ok) {
+            let json = await proxyRes.json();
+            html = json.contents;
+          }
+        } catch (e) {}
+      }
+
+      // LỚP 3: Dự phòng cuối cùng bằng corsproxy.org
+      if (!html) {
+        try {
+          let proxyUrl2 = `https://corsproxy.org/?${encodeURIComponent(rawUrl)}`;
+          let proxyRes2 = await fetch(proxyUrl2, { signal: controller.signal });
+          if (proxyRes2.ok) html = await proxyRes2.text();
+        } catch (e) {}
       }
       
       clearTimeout(timeoutId);
 
-      // Bỏ qua nếu vẫn không có dữ liệu hoặc không phải bảng Đặc biệt
       if (!html || !html.toLowerCase().includes("đặc biệt")) continue;
 
       const parser = new DOMParser();
@@ -104,7 +121,7 @@ async function fetchSingleDay(year, month, day, offset, regCode) {
         return dayData; 
       }
     } catch (e) { 
-        // Bỏ qua lỗi vòng lặp hiện tại để thử URL dự phòng tiếp theo
+        // Lỗi timeout thì lặp sang nguồn phụ tiếp theo
     } 
   }
   return null; 
