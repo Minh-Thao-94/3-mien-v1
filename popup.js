@@ -106,7 +106,8 @@ async function handleFetchData() {
           cleanHtml += rowHtml;
         });
         cleanHtml += '</table>';
-        dayData.htmlTable = cleanHtml;
+        // Thêm div bọc ngoài với thuộc tính overflow-x: auto để vuốt ngang trên mobile
+        dayData.htmlTable = `<div style="overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; padding-bottom: 10px;">${cleanHtml}</div>`;
         processedHistory.push(dayData);
       }
     }
