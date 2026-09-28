@@ -132,12 +132,12 @@ async function handleFetchData() {
   
   contentBox.innerHTML = `
     <div class="loading-msg">
-      ⚡ Đang đồng bộ 60 ngày dữ liệu AI...<br>
+      ⚡ Đang đồng bộ 45 ngày dữ liệu AI...<br>
       <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Lần quét đầu tiên sẽ hơi chậm để nạp bộ nhớ đệm. Vui lòng chờ!</span>
     </div>`;
 
   let allResults = [];
-  const TOTAL_DAYS = 60; 
+  const TOTAL_DAYS = 45; 
   // Hạ BATCH_SIZE xuống 3 để an toàn tuyệt đối trước các bộ lọc chống Spam
   const BATCH_SIZE = 3; 
 
