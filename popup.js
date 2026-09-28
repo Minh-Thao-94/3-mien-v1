@@ -6,7 +6,6 @@ const BONG_AM = {'0':'7','1':'4','2':'9','3':'6','4':'1','5':'8','6':'3','7':'0'
 
 document.addEventListener("DOMContentLoaded", () => {
   setTodayDefault();
-  // Đã đổi tên hàm thành handleFetchData cho phù hợp với logic mới
   document.getElementById("btnXemKQ").addEventListener("click", handleFetchData);
   document.getElementById("btnPhanTich").addEventListener("click", handlePredictions);
 });
@@ -16,109 +15,6 @@ function setTodayDefault() {
   document.getElementById("datePicker").value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 }
 
-async function fetchSingleDay(year, month, day, offset, regCode) {
-  let d = new Date(year, month - 1, day - offset);
-  let dStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  
-  // CHIẾN THUẬT 1: KIỂM TRA BỘ NHỚ ĐỆM (Tốc độ 0.001 giây)
-  let cacheKey = `KQXS_VIP_${regCode}_${dStr}`;
-  try {
-    let cachedData = localStorage.getItem(cacheKey);
-    if (cachedData) {
-      return JSON.parse(cachedData); // Nếu đã có dữ liệu, trả về ngay lập tức, không tốn mạng
-    }
-  } catch (e) {}
-
-  // Nếu chưa có trong bộ nhớ, tiến hành cào dữ liệu qua mạng
-  let fetchDay = String(d.getDate()).padStart(2, '0');
-  let fetchMonth = String(d.getMonth() + 1).padStart(2, '0');
-  let fetchYear = d.getFullYear();
-  const rawUrl = `https://xskt.com.vn/${regCode}/ngay-${parseInt(fetchDay, 10)}-${parseInt(fetchMonth, 10)}-${fetchYear}`;
-  
-  let html = null;
-
-  try {
-    const c1 = new AbortController();
-    const t1 = setTimeout(() => c1.abort(), 6000); 
-    let res1 = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${rawUrl}`, { signal: c1.signal });
-    clearTimeout(t1);
-    if (res1.ok) html = await res1.text();
-  } catch (e) {}
-
-  if (!html || !html.includes("đặc biệt")) {
-    try {
-      const c2 = new AbortController();
-      const t2 = setTimeout(() => c2.abort(), 6000);
-      let res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(rawUrl)}`, { signal: c2.signal });
-      clearTimeout(t2);
-      if (res2.ok) {
-        let json = await res2.json();
-        html = json.contents;
-      }
-    } catch (e) {}
-  }
-
-  if (!html || !html.toLowerCase().includes("đặc biệt")) return null;
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const tables = doc.querySelectorAll("table");
-  let targetTable = null;
-
-  for (let tbl of tables) {
-    let t = tbl.innerText.toLowerCase();
-    if (t.includes("tiền thưởng") || t.includes("trùng") || t.includes("sl giải")) continue;
-    if (t.includes("đặc biệt") || t.includes("giải đb") || t.includes("g.đb")) { targetTable = tbl; break; }
-  }
-
-  if (targetTable) {
-    let dayData = { date: dStr, prizes: [], htmlTable: "" };
-    const rows = targetTable.querySelectorAll("tr");
-    let cleanHtml = '<table class="clean-table">';
-
-    rows.forEach((tr, idx) => {
-      if (tr.closest('thead') && idx > 0) return; 
-      let cells = tr.querySelectorAll("th, td");
-      if (cells.length < 2) return;
-      let rowHtml = "<tr>";
-      let isDBRow = false;
-
-      cells.forEach((cell, ci) => {
-        let text = cell.textContent.replace(/\n/g, ' ').trim();
-        if (idx === 0 || cell.tagName === "TH") {
-          rowHtml += `<th>${text}</th>`;
-        } else {
-          if (ci === 0) {
-            rowHtml += `<td class="prize-name">${text}</td>`;
-            if (text.toLowerCase().includes("đặc biệt") || text.toLowerCase().includes("đb") || text.toLowerCase().includes("gđb")) isDBRow = true;
-          } else {
-            let nums = text.split(/\s+/).filter(n => !isNaN(n) && n.length > 0);
-            rowHtml += `<td class="prize-number">`;
-            nums.forEach(n => {
-              rowHtml += `<span class="num-pill">${n}</span>`;
-              dayData.prizes.push(n.replace(/\D/g, ''));
-            });
-            rowHtml += `</td>`;
-          }
-        }
-      });
-      rowHtml += "</tr>";
-      if (isDBRow) rowHtml = rowHtml.replace('<tr>', '<tr class="row-db">');
-      cleanHtml += rowHtml;
-    });
-    cleanHtml += '</table>';
-    dayData.htmlTable = cleanHtml;
-    
-    // CHIẾN THUẬT 2: LƯU VÀO CACHE SAU KHI TẢI THÀNH CÔNG (Chỉ lưu nếu đài đã quay xong)
-    if (dayData.prizes.length > 0) {
-        try { localStorage.setItem(cacheKey, JSON.stringify(dayData)); } catch(e) {}
-    }
-    
-    return dayData; 
-  }
-  return null; 
-}
-
 async function handleFetchData() {
   document.getElementById("predictSection").style.display = "none";
   document.getElementById("resultSection").style.display = "block";
@@ -126,74 +22,57 @@ async function handleFetchData() {
   if (!dateVal) return;
   
   const [year, month, day] = dateVal.split("-").map(Number);
+  const targetDateStr = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
   const regCode = document.getElementById("regionSelect").value === "mb" ? "xsmb" : (document.getElementById("regionSelect").value === "mn" ? "xsmn" : "xsmt");
 
   const contentBox = document.getElementById("resultContent");
-  
   contentBox.innerHTML = `
     <div class="loading-msg">
-      ⚡ Đang đồng bộ 45 ngày dữ liệu AI...<br>
-      <span style="font-size:0.9rem; font-weight:normal; color:#475569;">Lần quét đầu tiên sẽ hơi chậm để nạp bộ nhớ đệm. Vui lòng chờ!</span>
+      ⚡ Đang tải gói dữ liệu tĩnh từ máy chủ GitHub...<br>
     </div>`;
 
-  let allResults = [];
-  const TOTAL_DAYS = 45; 
-  // Hạ BATCH_SIZE xuống 3 để an toàn tuyệt đối trước các bộ lọc chống Spam
-  const BATCH_SIZE = 3; 
+  try {
+    // Tải nguyên file JSON đã được GitHub chuẩn bị sẵn (thêm timestamp để tránh cache trình duyệt)
+    let res = await fetch(`data_${regCode}.json?t=${new Date().getTime()}`);
+    if (!res.ok) throw new Error("Chưa tìm thấy file dữ liệu JSON từ máy chủ. Vui lòng kiểm tra lại GitHub Actions.");
+    let allData = await res.json();
 
-  for (let i = 0; i < TOTAL_DAYS; i += BATCH_SIZE) {
-    let fetchPromises = [];
-    for (let j = 0; j < BATCH_SIZE && (i + j) < TOTAL_DAYS; j++) {
-      fetchPromises.push(fetchSingleDay(year, month, day, i + j, regCode));
-    }
+    // Tìm mốc ngày T0 người dùng chọn trong mảng dữ liệu 100 ngày
+    let startIndex = allData.findIndex(d => d.date === targetDateStr);
     
-    let batchResults = await Promise.all(fetchPromises);
-    allResults = allResults.concat(batchResults);
+    if (startIndex === -1) {
+      contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Không có dữ liệu cho ngày ${targetDateStr}. Vui lòng chọn ngày gần đây hơn.</div>`;
+      return;
+    }
+
+    // Cắt lấy đúng 60 ngày tính từ mốc T0 lùi về trước
+    REAL_DATA.history = allData.slice(startIndex, startIndex + 60);
+
+    let msg = `✅ Đã tải siêu tốc ${REAL_DATA.history.length} ngày!`;
+    let actualDate = REAL_DATA.history[0].date;
     
     contentBox.innerHTML = `
-    <div class="loading-msg">
-      ⚡ Đang xử lý thuật toán (Không đóng trang)...<br>
-      <span style="font-size:1.1rem; font-weight:bold; color:#2563eb;">⏳ Tiến trình: ${Math.min(i + BATCH_SIZE, TOTAL_DAYS)} / 60 ngày</span>
-    </div>`;
-
-    // Tăng thời gian nghỉ lên 1 giây (1000ms) để không làm nghẽn Proxy
-    if (i + BATCH_SIZE < TOTAL_DAYS) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
+      <div style="text-align:center; padding:10px; color:#166534; font-weight:bold; background:#dcfce7; margin-bottom:10px; border-radius:6px;">
+          ${msg}
+      </div>
+      <div style="text-align:center; padding:12px; margin-bottom:15px; border-radius:6px; background:#fff5f5; border: 2px dashed #fca5a5; color: #b91c1c; font-size: 1.6rem; font-weight: 800; text-transform: uppercase;">
+          📅 KẾT QUẢ XỔ SỐ NGÀY: ${actualDate}
+      </div>
+      ${REAL_DATA.history[0].htmlTable}
+    `;
+  } catch (error) {
+    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Lỗi kết nối: ${error.message}</div>`;
   }
+}
 
-  // Lọc bỏ các ngày bị lỗi mạng (null)
-  REAL_DATA.history = allResults.filter(d => d !== null);
-
-  // Cho phép phân tích ngay cả khi chỉ lấy được một phần dữ liệu (chỉ báo lỗi nếu lấy được dưới 5 ngày)
-  if (REAL_DATA.history.length < 5) {
-    contentBox.innerHTML = `<div class="loading-msg" style="color:#b91c1c;">⚠️ Máy chủ xổ số đang bảo trì hoặc mạng quá yếu. Hãy thử lại!</div>`;
-    return;
+function computePascal(str) {
+  let cur = (str || "00000").split('').map(n => parseInt(n, 10) || 0);
+  while (cur.length > 2) {
+    let nxt = [];
+    for (let i = 0; i < cur.length - 1; i++) nxt.push((cur[i] + cur[i + 1]) % 10);
+    cur = nxt;
   }
-
-  let msg = `✅ Đồng bộ hoàn tất ${REAL_DATA.history.length} ngày!`;
-  
-  // Cảnh báo nhẹ nếu bị thiếu ngày nhưng vẫn cho phép đi tiếp
-  if (REAL_DATA.history.length < TOTAL_DAYS) {
-    msg = `⚠️ Đã lấy ${REAL_DATA.history.length}/${TOTAL_DAYS} ngày (Vẫn đủ dữ liệu để AI phân tích).`;
-  }
-
-  if (REAL_DATA.history[0].prizes.length === 0) {
-    REAL_DATA.history.shift(); 
-    msg += `<br>⚠️ Ngày T0 chưa quay thưởng! Đã lùi mốc.`;
-  }
-  
-  let actualDate = REAL_DATA.history[0].date;
-  
-  contentBox.innerHTML = `
-    <div style="text-align:center; padding:10px; color:#166534; font-weight:bold; background:#dcfce7; margin-bottom:10px; border-radius:6px;">
-        ${msg}
-    </div>
-    <div style="text-align:center; padding:12px; margin-bottom:15px; border-radius:6px; background:#fff5f5; border: 2px dashed #fca5a5; color: #b91c1c; font-size: 1.6rem; font-weight: 800; text-transform: uppercase;">
-        📅 KẾT QUẢ XỔ SỐ NGÀY: ${actualDate}
-    </div>
-    ${REAL_DATA.history[0].htmlTable}
-  `;
+  return cur.join('');
 }
 
 function computeMatrix(str1, str2) {
@@ -405,7 +284,6 @@ function runDynamicAnalysis() {
     let dan20 = sortedDe.slice(0, 20).map(x => x.num).sort();
     let dan36 = sortedDe.slice(0, 36).map(x => x.num).sort();
     
-    // Khai báo thêm các dàn 48, 52, 64
     let dan48 = sortedDe.slice(0, 48).map(x => x.num).sort();
     let dan52 = sortedDe.slice(0, 52).map(x => x.num).sort();
     let dan64 = sortedDe.slice(0, 64).map(x => x.num).sort();
@@ -415,7 +293,6 @@ function runDynamicAnalysis() {
     document.getElementById("dan20DeBox").innerHTML = dan20.map(getSimpleBadge).join(' ');
     document.getElementById("dan36DeBox").innerHTML = dan36.map(getSimpleBadge).join(' ');
 
-    // Xuất các dàn 48, 52, 64 ra giao diện
     document.getElementById("dan48DeBox").innerHTML = dan48.map(getSimpleBadge).join(' ');
     document.getElementById("dan52DeBox").innerHTML = dan52.map(getSimpleBadge).join(' ');
     document.getElementById("dan64DeBox").innerHTML = dan64.map(getSimpleBadge).join(' ');
